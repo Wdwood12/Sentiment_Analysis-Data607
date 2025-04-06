@@ -1,0 +1,154 @@
+---
+title: "Sentiment Analysis"
+author: "Woodelyne Durosier"
+date: "2025-04-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Sentiment Analysis using Tidytext in R.
+
+This report replicates the sentiment analysis in Chapter 2 of Silge and Robinson's (2017) Text Mining with R, then expands on the method by analyzing New York Times-style headlines with both AFINN and Bing sentiment lexicons.
+
+# Load Library
+
+```{r}
+
+library(tidytext)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(tidyr)
+library(janeaustenr) # for original example
+library(textdata)    # for additional lexicons
+library(readr)
+library(tibble)
+
+```
+
+# Replicate Original Example (Jane Austen's book)
+
+```{r}
+ original_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(line_number = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]", ignore_case = TRUE)))) %>%
+  ungroup()
+
+```
+
+```{r}
+# Tokenization
+
+tidy_books <-original_books |>
+  unnest_tokens(word, text)
+```
+
+```{r}
+bing <-get_sentiments("bing")
+
+bing_sentiment <- tidy_books %>%
+  inner_join(bing, by = "word")
+```
+```{r}
+# count sentiment overtime
+bing_sentiment_count <- bing_sentiment %>%
+  count(book, index = line_number %/% 80, sentiment) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment_score = positive - negative)
+```
+
+# Visualization
+```{r}
+ggplot(bing_sentiment_count, aes(index, sentiment_score, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, scales = "free_x") +
+  labs(title = "Sentiment Trajectory of Jane Austen’s Books")
+
+```
+## Extension working with a difference corpus
+
+```{r}
+
+nyt_headlines <- tribble(
+  ~headline,
+  "Economy shows strong growth amid optimism",
+  "Devastating floods leave thousands homeless",
+  "Stock market crashes sparking investor fear",
+  "Healthcare reform brings relief to families",
+  "Biden promises hopeful future for workers",
+  "Rising crime fuels public anger and concern"
+)
+
+```
+
+# Clean and Tidy Data
+```{r}
+
+tidy_nyt <- nyt_headlines %>%
+  unnest_tokens(word, headline) %>%
+  anti_join(stop_words, by = "word")
+```
+
+# Apply AFINN Sentiment Lexicon
+
+```{r}
+afinn <- get_sentiments("afinn")
+
+
+
+nyt_afinn <- tidy_nyt %>%
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  mutate(index = row_number() %/% 2) %>%
+  group_by(index) %>%
+  summarise(sentiment = sum(value))
+
+ 
+print(nyt_afinn)
+```
+
+# Visualize
+
+```{r}
+
+ggplot(nyt_afinn, aes(index, sentiment)) +
+  geom_col(fill = "purple") +
+  labs(title = "AFINN Sentiment in NYT Headlines",
+       x = "Headline Group", y = "Sentiment Score")
+
+```
+
+# Extension: Bing Sentiment Lexicon
+
+```{r}
+bing <- get_sentiments("bing")
+
+bing_sentiment <- tidy_nyt |>
+  inner_join(bing, by = "word")|>
+  count(sentiment)
+  
+```
+
+# Visualize Bing Sentiment 
+
+```{r}
+ggplot(bing_sentiment, aes(x = sentiment, y = n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Sentiment in NYT Headlines (Bing)",
+       x = "Sentiment Category", y = "Word Count")
+```
+
+# Conclusion
+
+This investigation shows how sentiment lexicons such as AFINN and Bing may give information about the emotional tone of news headlines.  AFINN measures numerical intensity, whereas Bing categorizes emotions into binary categories.  Future studies might incorporate real-time data via APIs or the NRC lexicon to provide a larger emotional palette.
+
+
+# Reference
+ Silge, J., & Robinson, D. (2017). Text Mining with R: A Tidy Approach. O'Reilly Media, Inc.
+
+Tidytext package: https://github.com/juliasilge/tidytext
+ 
+
